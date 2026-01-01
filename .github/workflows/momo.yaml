@@ -30,7 +30,9 @@ jobs:
 
     - name: Build and push frontend image
       run: |
-        docker build -t karimshahid/frontend:latest ./frontend
+        docker build \
+        --build-arg VITE_API_URL=http://3.227.239.104:4000/api \
+        -t karimshahid/frontend:latest ./frontend
         docker push karimshahid/frontend:latest
       
   deploy-in-ec2:

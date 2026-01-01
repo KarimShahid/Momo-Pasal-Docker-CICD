@@ -1,0 +1,72 @@
+name: Deploying Momo pasal in my EC2.
+
+on: 
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    name: "Build Docker Image and Push to Docker Hub"
+    runs-on: ubuntu-latest
+    env:
+     SERVER_IP: ${{ vars.SERVER_IP }}
+
+    
+    steps:
+    - name: "Checkout Code"
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+
+    - name: Build and push backend image
+      run: |
+        docker build -t karimshahid/backend:latest ./backend
+        docker push karimshahid/backend:latest
+
+    - name: Build and push frontend image
+      run: |
+        docker build -t karimshahid/frontend:latest ./frontend
+        docker push karimshahid/frontend:latest
+      
+  deploy-in-ec2:
+    name: "Docker Compose Up in ec2"
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps: 
+    - name: "Configure SSH"
+      run: |
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        echo -e "Host *\n\tStrictHostKeyChecking no\n\n" > ~/.ssh/config
+        cat ~/.ssh/config
+        touch ~/.ssh/known_hosts
+        chmod 600 ~/.ssh/known_hosts
+
+    - name: "SSH key access"
+      run : |
+        touch mykey.pem
+        echo $SSH_KEY64 | base64 -d > mykey.pem
+        chmod 400 mykey.pem
+        ls -lah mykey.pem #check
+        ssh-keygen -R $SERVER_IP 
+      env:
+        SSH_KEY64: ${{ secrets.SSH_KEY64 }}
+
+    - name: "Run Docker Image"
+      run: |
+        ssh -t ec2-user@$SERVER_IP -i mykey.pem << 'EOF'
+          cd ~/momo-app
+          docker compose pull
+          docker compose up -d
+        EOF
+
+
